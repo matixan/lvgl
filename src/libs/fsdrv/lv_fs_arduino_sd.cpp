@@ -3,7 +3,7 @@
 
 #include "../../core/lv_global.h"
 #include <SPI.h>
-#include "SD.h"
+#include "SD_MMC.h"
 
 typedef struct SdFile {
     File file;
@@ -52,7 +52,7 @@ extern "C" void lv_fs_arduino_sd_init(void)
 /*Initialize your Storage device and File system.*/
 static void fs_init(void)
 {
-    if(!SD.begin(LV_FS_ARDUINO_SD_CS_PIN, SPI, LV_FS_ARDUINO_SD_FREQUENCY)) {
+    if(!SD_MMC.begin()) {
         LV_LOG_WARN("Driver Arduino SD Card not mounted");
         return;
     }
@@ -79,7 +79,13 @@ static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode)
     else if(mode == (LV_FS_MODE_WR | LV_FS_MODE_RD))
         flags = FILE_WRITE;
 
-    File file = SD.open(path, flags);
+    File file = SD_MMC.open(path, flags);
+    ESP_LOGD("fs_open", "Opening file %s with mode %d", path, mode);
+    if (SD_MMC.exists(path)) {
+        ESP_LOGV("fs_open", "File exists");
+    } else {
+        ESP_LOGV("fs_open", "File does not exist");
+    }
     if(!file) {
         return NULL;
     }
