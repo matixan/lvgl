@@ -80,7 +80,6 @@ static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode)
         flags = FILE_WRITE;
 
     File file = SD_MMC.open(path, flags);
-    ESP_LOGD("fs_open", "Opening file %s with mode %d", path, mode);
     if (SD_MMC.exists(path)) {
         ESP_LOGV("fs_open", "File exists");
     } else {
