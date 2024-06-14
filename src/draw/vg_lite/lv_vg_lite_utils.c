@@ -162,6 +162,7 @@ const char * lv_vg_lite_feature_string(vg_lite_feature_t feature)
             FEATURE_ENUM_TO_STRING(YUV_TILED_INPUT);
             FEATURE_ENUM_TO_STRING(AYUV_INPUT);
             FEATURE_ENUM_TO_STRING(16PIXELS_ALIGN);
+            FEATURE_ENUM_TO_STRING(DEC_COMPRESS_2_0);
         default:
             break;
     }
@@ -500,7 +501,7 @@ uint32_t lv_vg_lite_width_to_stride(uint32_t w, vg_lite_buffer_format_t color_fo
 
     uint32_t mul, div, align;
     lv_vg_lite_buffer_format_bytes(color_format, &mul, &div, &align);
-    return LV_VG_LITE_ALIGN((w * mul / div), align);
+    return LV_VG_LITE_ALIGN(((w * mul + div - 1) / div), align);
 }
 
 uint32_t lv_vg_lite_width_align(uint32_t w)
@@ -961,11 +962,6 @@ void lv_vg_lite_matrix_multiply(vg_lite_matrix_t * matrix, const vg_lite_matrix_
 
     /* Copy temporary matrix into result. */
     lv_memcpy(matrix, &temp, sizeof(temp));
-}
-
-void lv_vg_lite_matrix_flip_y(vg_lite_matrix_t * matrix)
-{
-    matrix->m[1][1] = -matrix->m[1][1];
 }
 
 bool lv_vg_lite_matrix_inverse(vg_lite_matrix_t * result, const vg_lite_matrix_t * matrix)
