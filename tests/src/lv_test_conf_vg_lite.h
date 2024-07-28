@@ -15,15 +15,10 @@
  * but does not guarantee the same rendering quality as the software. */
 #define LV_VG_LITE_USE_BOX_SHADOW 1
 
-/* VG-Lite linear gradient image maximum cache number.
+/* VG-Lite gradient maximum cache number.
  * NOTE: The memory usage of a single gradient image is 4K bytes.
  */
-#define LV_VG_LITE_LINEAR_GRAD_CACHE_CNT 32
-
-/* VG-Lite radial gradient image maximum cache size.
- * NOTE: The memory usage of a single gradient image is radial grad radius * 4 bytes.
- */
-#define LV_VG_LITE_RADIAL_GRAD_CACHE_CNT 32
+#define LV_VG_LITE_GRAD_CACHE_CNT 32
 
 /* Disable 16 pixels alignment */
 #define LV_VG_LITE_THORVG_16PIXELS_ALIGN 0
@@ -36,3 +31,9 @@
 
 /* Enable performance monitor log mode for build test */
 #define LV_USE_PERF_MONITOR_LOG_MODE 1
+
+/*Using matrix for transformations.
+ *Requirements:
+    `LV_USE_MATRIX = 1`.
+    The rendering engine needs to support 3x3 matrix transformations.*/
+#define LV_DRAW_TRANSFORM_USE_MATRIX            1

@@ -47,7 +47,7 @@
 #endif
 
 /*If lv_conf.h is not skipped include it*/
-#ifndef LV_CONF_SKIP
+#if !defined(LV_CONF_SKIP) || defined(LV_CONF_PATH)
     #ifdef LV_CONF_PATH                           /*If there is a path defined for lv_conf.h use it*/
         #define __LV_TO_STR_AUX(x) #x
         #define __LV_TO_STR(x) __LV_TO_STR_AUX(x)
@@ -293,6 +293,18 @@
     #endif
 #endif
 
+/*Using matrix for transformations.
+ *Requirements:
+    `LV_USE_MATRIX = 1`.
+    The rendering engine needs to support 3x3 matrix transformations.*/
+#ifndef LV_DRAW_TRANSFORM_USE_MATRIX
+    #ifdef CONFIG_LV_DRAW_TRANSFORM_USE_MATRIX
+        #define LV_DRAW_TRANSFORM_USE_MATRIX CONFIG_LV_DRAW_TRANSFORM_USE_MATRIX
+    #else
+        #define LV_DRAW_TRANSFORM_USE_MATRIX            0
+    #endif
+#endif
+
 /* If a widget has `style_opa < 255` (not `bg_opa`, `text_opa` etc) or not NORMAL blend mode
  * it is buffered into a "simple" layer before rendering. The widget can be buffered in smaller chunks.
  * "Transformed layers" (if `transform_angle/zoom` are set) use larger buffers
@@ -426,10 +438,21 @@
 	        #define LV_DRAW_SW_SUPPORT_A8			1
 	    #endif
 	#endif
+	#ifndef LV_DRAW_SW_SUPPORT_I1
+	    #ifdef _LV_KCONFIG_PRESENT
+	        #ifdef CONFIG_LV_DRAW_SW_SUPPORT_I1
+	            #define LV_DRAW_SW_SUPPORT_I1 CONFIG_LV_DRAW_SW_SUPPORT_I1
+	        #else
+	            #define LV_DRAW_SW_SUPPORT_I1 0
+	        #endif
+	    #else
+	        #define LV_DRAW_SW_SUPPORT_I1			1
+	    #endif
+	#endif
 
 	/* Set the number of draw unit.
      * > 1 requires an operating system enabled in `LV_USE_OS`
-     * > 1 means multiply threads will render the screen in parallel */
+     * > 1 means multiple threads will render the screen in parallel */
     #ifndef LV_DRAW_SW_DRAW_UNIT_CNT
         #ifdef _LV_KCONFIG_PRESENT
             #ifdef CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT
@@ -657,25 +680,24 @@
     #endif
 #endif
 
-/* VG-Lite linear gradient image maximum cache number.
+/* VG-Lite gradient maximum cache number.
  * NOTE: The memory usage of a single gradient image is 4K bytes.
  */
-#ifndef LV_VG_LITE_LINEAR_GRAD_CACHE_CNT
-    #ifdef CONFIG_LV_VG_LITE_LINEAR_GRAD_CACHE_CNT
-        #define LV_VG_LITE_LINEAR_GRAD_CACHE_CNT CONFIG_LV_VG_LITE_LINEAR_GRAD_CACHE_CNT
+#ifndef LV_VG_LITE_GRAD_CACHE_CNT
+    #ifdef CONFIG_LV_VG_LITE_GRAD_CACHE_CNT
+        #define LV_VG_LITE_GRAD_CACHE_CNT CONFIG_LV_VG_LITE_GRAD_CACHE_CNT
     #else
-        #define LV_VG_LITE_LINEAR_GRAD_CACHE_CNT 32
+        #define LV_VG_LITE_GRAD_CACHE_CNT 32
     #endif
 #endif
 
-/* VG-Lite radial gradient image maximum cache size.
- * NOTE: The memory usage of a single gradient image is radial grad radius * 4 bytes.
+/* VG-Lite stroke maximum cache number.
  */
-#ifndef LV_VG_LITE_RADIAL_GRAD_CACHE_CNT
-    #ifdef CONFIG_LV_VG_LITE_RADIAL_GRAD_CACHE_CNT
-        #define LV_VG_LITE_RADIAL_GRAD_CACHE_CNT CONFIG_LV_VG_LITE_RADIAL_GRAD_CACHE_CNT
+#ifndef LV_VG_LITE_STROKE_CACHE_CNT
+    #ifdef CONFIG_LV_VG_LITE_STROKE_CACHE_CNT
+        #define LV_VG_LITE_STROKE_CACHE_CNT CONFIG_LV_VG_LITE_STROKE_CACHE_CNT
     #else
-        #define LV_VG_LITE_RADIAL_GRAD_CACHE_CNT 32
+        #define LV_VG_LITE_STROKE_CACHE_CNT 32
     #endif
 #endif
 
@@ -1078,6 +1100,19 @@
     #endif
 #endif
 
+/*Enable property name support*/
+#ifndef LV_USE_OBJ_PROPERTY_NAME
+    #ifdef _LV_KCONFIG_PRESENT
+        #ifdef CONFIG_LV_USE_OBJ_PROPERTY_NAME
+            #define LV_USE_OBJ_PROPERTY_NAME CONFIG_LV_USE_OBJ_PROPERTY_NAME
+        #else
+            #define LV_USE_OBJ_PROPERTY_NAME 0
+        #endif
+    #else
+        #define LV_USE_OBJ_PROPERTY_NAME 1
+    #endif
+#endif
+
 /* VG-Lite Simulator */
 /*Requires: LV_USE_THORVG_INTERNAL or LV_USE_THORVG_EXTERNAL */
 #ifndef LV_USE_VG_LITE_THORVG
@@ -1105,6 +1140,15 @@
             #define LV_VG_LITE_THORVG_YUV_SUPPORT CONFIG_LV_VG_LITE_THORVG_YUV_SUPPORT
         #else
             #define LV_VG_LITE_THORVG_YUV_SUPPORT 0
+        #endif
+    #endif
+
+    /*Enable Linear gradient extension support*/
+    #ifndef LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT
+        #ifdef CONFIG_LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT
+            #define LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT CONFIG_LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT
+        #else
+            #define LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT 0
         #endif
     #endif
 
@@ -1232,7 +1276,7 @@
 #endif
 
 /*Export integer constant to binding. This macro is used with constants in the form of LV_<CONST> that
- *should also appear on LVGL binding API such as Micropython.*/
+ *should also appear on LVGL binding API such as MicroPython.*/
 #ifndef LV_EXPORT_CONST_INT
     #ifdef CONFIG_LV_EXPORT_CONST_INT
         #define LV_EXPORT_CONST_INT CONFIG_LV_EXPORT_CONST_INT
@@ -1256,6 +1300,16 @@
         #define LV_USE_FLOAT CONFIG_LV_USE_FLOAT
     #else
         #define LV_USE_FLOAT            0
+    #endif
+#endif
+
+/*Enable matrix support
+ *Requires `LV_USE_FLOAT = 1`*/
+#ifndef LV_USE_MATRIX
+    #ifdef CONFIG_LV_USE_MATRIX
+        #define LV_USE_MATRIX CONFIG_LV_USE_MATRIX
+    #else
+        #define LV_USE_MATRIX           0
     #endif
 #endif
 
@@ -1598,7 +1652,7 @@
 #endif
 
 /*Enable Arabic/Persian processing
- *In these languages characters should be replaced with an other form based on their position in the text*/
+ *In these languages characters should be replaced with another form based on their position in the text*/
 #ifndef LV_USE_ARABIC_PERSIAN_CHARS
     #ifdef CONFIG_LV_USE_ARABIC_PERSIAN_CHARS
         #define LV_USE_ARABIC_PERSIAN_CHARS CONFIG_LV_USE_ARABIC_PERSIAN_CHARS
@@ -2586,6 +2640,13 @@
             #define LV_TINY_TTF_FILE_SUPPORT 0
         #endif
     #endif
+    #ifndef LV_TINY_TTF_CACHE_GLYPH_CNT
+        #ifdef CONFIG_LV_TINY_TTF_CACHE_GLYPH_CNT
+            #define LV_TINY_TTF_CACHE_GLYPH_CNT CONFIG_LV_TINY_TTF_CACHE_GLYPH_CNT
+        #else
+            #define LV_TINY_TTF_CACHE_GLYPH_CNT 256
+        #endif
+    #endif
 #endif
 
 /*Rlottie library*/
@@ -2597,7 +2658,8 @@
     #endif
 #endif
 
-/*Enable Vector Graphic APIs*/
+/*Enable Vector Graphic APIs
+ *Requires `LV_USE_MATRIX = 1`*/
 #ifndef LV_USE_VECTOR_GRAPHIC
     #ifdef CONFIG_LV_USE_VECTOR_GRAPHIC
         #define LV_USE_VECTOR_GRAPHIC CONFIG_LV_USE_VECTOR_GRAPHIC
@@ -2881,7 +2943,7 @@
 #endif
 #if LV_USE_IME_PINYIN
     /*1: Use default thesaurus*/
-    /*If you do not use the default thesaurus, be sure to use `lv_ime_pinyin` after setting the thesauruss*/
+    /*If you do not use the default thesaurus, be sure to use `lv_ime_pinyin` after setting the thesaurus*/
     #ifndef LV_IME_PINYIN_USE_DEFAULT_DICT
         #ifdef _LV_KCONFIG_PRESENT
             #ifdef CONFIG_LV_IME_PINYIN_USE_DEFAULT_DICT
@@ -3052,7 +3114,7 @@
                 #define LV_X11_DOUBLE_BUFFER 0
             #endif
         #else
-            #define LV_X11_DOUBLE_BUFFER       1  /*Use double buffers for endering*/
+            #define LV_X11_DOUBLE_BUFFER       1  /*Use double buffers for rendering*/
         #endif
     #endif
     /*select only 1 of the following render modes (LV_X11_RENDER_MODE_PARTIAL preferred!)*/
@@ -3324,6 +3386,28 @@
             #endif
         #else
             #define LV_USE_OPENGLES_DEBUG        1    /* Enable or disable debug for opengles */
+        #endif
+    #endif
+#endif
+
+/* QNX Screen display and input drivers */
+#ifndef LV_USE_QNX
+    #ifdef CONFIG_LV_USE_QNX
+        #define LV_USE_QNX CONFIG_LV_USE_QNX
+    #else
+        #define LV_USE_QNX              0
+    #endif
+#endif
+#if LV_USE_QNX
+    #ifndef LV_QNX_BUF_COUNT
+        #ifdef _LV_KCONFIG_PRESENT
+            #ifdef CONFIG_LV_QNX_BUF_COUNT
+                #define LV_QNX_BUF_COUNT CONFIG_LV_QNX_BUF_COUNT
+            #else
+                #define LV_QNX_BUF_COUNT 0
+            #endif
+        #else
+            #define LV_QNX_BUF_COUNT        1    /*1 or 2*/
         #endif
     #endif
 #endif

@@ -431,11 +431,11 @@ static void style_init(my_theme_t * theme)
     lv_style_set_bg_color(&theme->styles.cb_marker, theme->color_card);
     lv_style_set_bg_opa(&theme->styles.cb_marker, LV_OPA_COVER);
     lv_style_set_radius(&theme->styles.cb_marker, RADIUS_DEFAULT / 2);
+    lv_style_set_text_font(&theme->styles.cb_marker, theme->base.font_small);
+    lv_style_set_text_color(&theme->styles.cb_marker, lv_color_white());
 
     style_init_reset(&theme->styles.cb_marker_checked);
     lv_style_set_bg_image_src(&theme->styles.cb_marker_checked, LV_SYMBOL_OK);
-    lv_style_set_text_color(&theme->styles.cb_marker_checked, lv_color_white());
-    lv_style_set_text_font(&theme->styles.cb_marker_checked, theme->base.font_small);
 #endif
 
 #if LV_USE_SWITCH
@@ -629,6 +629,7 @@ static void style_init(my_theme_t * theme)
     lv_style_set_line_width(&theme->styles.scale, LV_DPX(2));
     lv_style_set_arc_color(&theme->styles.scale, theme->color_text);
     lv_style_set_arc_width(&theme->styles.scale, LV_DPX(2));
+    lv_style_set_length(&theme->styles.scale, LV_DPX(6));
 #endif
 }
 
@@ -640,7 +641,7 @@ lv_theme_t * lv_theme_default_init(lv_display_t * disp, lv_color_t color_primary
                                    const lv_font_t * font)
 {
     /*This trick is required only to avoid the garbage collection of
-     *styles' data if LVGL is used in a binding (e.g. Micropython)
+     *styles' data if LVGL is used in a binding (e.g. MicroPython)
      *In a general case styles could be in a simple `static lv_style_t my_style...` variables*/
 
     if(!lv_theme_default_is_inited()) {

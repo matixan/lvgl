@@ -15,8 +15,13 @@ extern "C" {
  *********************/
 #include "lv_draw.h"
 #include "../misc/lv_array.h"
+#include "../misc/lv_matrix.h"
 
 #if LV_USE_VECTOR_GRAPHIC
+
+#if !LV_USE_MATRIX
+#error "lv_draw_vector needs LV_USE_MATRIX = 1"
+#endif
 
 /**********************
  *      TYPEDEFS
@@ -96,10 +101,6 @@ typedef struct {
 } lv_fpoint_t;
 
 typedef struct {
-    float m[3][3];
-} lv_matrix_t;
-
-typedef struct {
     lv_vector_path_quality_t quality;
     lv_array_t ops;
     lv_array_t points;
@@ -107,7 +108,12 @@ typedef struct {
 
 typedef struct {
     lv_vector_gradient_style_t style;
-    lv_grad_dsc_t grad;
+    lv_gradient_stop_t   stops[LV_GRADIENT_MAX_STOPS];  /**< A gradient stop array */
+    uint16_t             stops_count;                   /**< The number of used stops in the array */
+    float x1;
+    float y1;
+    float x2;
+    float y2;
     float cx;
     float cy;
     float cr;
@@ -160,50 +166,6 @@ typedef struct {
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
-
-/**
- * Set matrix to identity matrix
- * @param matrix           pointer to a matrix
- */
-void lv_matrix_identity(lv_matrix_t * matrix);
-
-/**
- * Translate the matrix to new position
- * @param matrix           pointer to a matrix
- * @param tx               the amount of translate in x direction
- * @param tx               the amount of translate in y direction
- */
-void lv_matrix_translate(lv_matrix_t * matrix, float tx, float ty);
-
-/**
- * Change the scale factor of the matrix
- * @param matrix           pointer to a matrix
- * @param scale_x          the scale factor for the X direction
- * @param scale_y          the scale factor for the Y direction
- */
-void lv_matrix_scale(lv_matrix_t * matrix, float scale_x, float scale_y);
-
-/**
- * Rotate the matrix with origin
- * @param matrix           pointer to a matrix
- * @param degree           angle to rotate
- */
-void lv_matrix_rotate(lv_matrix_t * matrix, float degree);
-
-/**
- * Change the skew factor of the matrix
- * @param matrix           pointer to a matrix
- * @param skew_x           the skew factor for x direction
- * @param skew_y           the skew factor for y direction
- */
-void lv_matrix_skew(lv_matrix_t * matrix, float skew_x, float skew_y);
-
-/**
- * Multiply two matrix and store the result to the first one
- * @param matrix           pointer to a matrix
- * @param matrix2          pointer to another matrix
- */
-void lv_matrix_multiply(lv_matrix_t * matrix, const lv_matrix_t * matrix2);
 
 /**
  * Transform the coordinates of a point using given matrix
@@ -391,24 +353,39 @@ void lv_vector_dsc_set_fill_image(lv_vector_dsc_t * dsc, const lv_draw_image_dsc
 
 /**
  * Set fill linear gradient for descriptor
- * @param dsc              pointer to a vector graphic descriptor
- * @param grad             pointer to a `lv_grad_dsc_t` variable
- * @param spread           the gradient spread to be set in lv_vector_gradient_spread_t format
+ * @param dsc pointer to a vector graphic descriptor
+ * @param x1 the x for start point
+ * @param y1 the y for start point
+ * @param x2 the x for end point
+ * @param y2 the y for end point
  */
-void lv_vector_dsc_set_fill_linear_gradient(lv_vector_dsc_t * dsc, const lv_grad_dsc_t * grad,
-                                            lv_vector_gradient_spread_t spread);
+void lv_vector_dsc_set_fill_linear_gradient(lv_vector_dsc_t * dsc, float x1, float y1, float x2, float y2);
 
 /**
- * Set fill radial gradient for descriptor
- * @param dsc              pointer to a vector graphic descriptor
- * @param grad             pointer to a `lv_grad_dsc_t` variable
- * @param cx               the x for center of the circle
- * @param cy               the y for center of the circle
- * @param radius           the radius for circle
- * @param spread           the gradient spread to be set in lv_vector_gradient_spread_t format
+
+ * Set fill radial gradient radius for descriptor
+ * @param dsc pointer to a vector graphic descriptor
+ * @param cx the x for center of the circle
+ * @param cy the y for center of the circle
+ * @param radius the radius for circle
  */
-void lv_vector_dsc_set_fill_radial_gradient(lv_vector_dsc_t * dsc, const lv_grad_dsc_t * grad, float cx, float cy,
-                                            float radius, lv_vector_gradient_spread_t spread);
+void lv_vector_dsc_set_fill_radial_gradient(lv_vector_dsc_t * dsc, float cx, float cy, float radius);
+
+/**
+ * Set fill radial gradient spread for descriptor
+ * @param dsc pointer to a vector graphic descriptor
+ * @param spread the gradient spread to be set in lv_vector_gradient_spread_t format
+ */
+void lv_vector_dsc_set_fill_gradient_spread(lv_vector_dsc_t * dsc, lv_vector_gradient_spread_t spread);
+
+/**
+ * Set fill gradient color stops for descriptor
+ * @param dsc              pointer to a vector graphic descriptor
+ * @param stops            an array of `lv_gradient_stop_t` variables
+ * @param count            the number of stops in the array, range: 0..LV_GRADIENT_MAX_STOPS
+ */
+void lv_vector_dsc_set_fill_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_gradient_stop_t * stops,
+                                                 uint16_t count);
 
 /**
  * Set a matrix to current fill transformation matrix
@@ -477,22 +454,37 @@ void lv_vector_dsc_set_stroke_miter_limit(lv_vector_dsc_t * dsc, uint16_t miter_
 /**
  * Set stroke linear gradient for descriptor
  * @param dsc              pointer to a vector graphic descriptor
- * @param grad             pointer to a `lv_grad_dsc_t` variable
- * @param spread           the gradient spread to be set in lv_vector_gradient_spread_t format
+ * @param x1               the x for start point
+ * @param y1               the y for start point
+ * @param x2               the x for end point
+ * @param y2               the y for end point
  */
-void lv_vector_dsc_set_stroke_linear_gradient(lv_vector_dsc_t * dsc, const lv_grad_dsc_t * grad,
-                                              lv_vector_gradient_spread_t spread);
+void lv_vector_dsc_set_stroke_linear_gradient(lv_vector_dsc_t * dsc, float x1, float y1, float x2, float y2);
 /**
  * Set stroke radial gradient for descriptor
  * @param dsc              pointer to a vector graphic descriptor
- * @param grad             pointer to a `lv_grad_dsc_t` variable
  * @param cx               the x for center of the circle
  * @param cy               the y for center of the circle
  * @param radius           the radius for circle
+ */
+void lv_vector_dsc_set_stroke_radial_gradient(lv_vector_dsc_t * dsc, float cx, float cy, float radius);
+
+/**
+ * Set stroke color stops for descriptor
+ * @param dsc              pointer to a vector graphic descriptor
  * @param spread           the gradient spread to be set in lv_vector_gradient_spread_t format
  */
-void lv_vector_dsc_set_stroke_radial_gradient(lv_vector_dsc_t * dsc, const lv_grad_dsc_t * grad, float cx, float cy,
-                                              float radius, lv_vector_gradient_spread_t spread);
+void lv_vector_dsc_set_stroke_gradient_spread(lv_vector_dsc_t * dsc, lv_vector_gradient_spread_t spread);
+
+/**
+ * Set stroke color stops for descriptor
+ * @param dsc              pointer to a vector graphic descriptor
+ * @param stops            an array of `lv_gradient_stop_t` variables
+ * @param count            the number of stops in the array
+ */
+void lv_vector_dsc_set_stroke_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_gradient_stop_t * stops,
+                                                   uint16_t count);
+
 /**
  * Set a matrix to current stroke transformation matrix
  * @param dsc              pointer to a vector graphic descriptor

@@ -10,6 +10,7 @@
 #define LV_USE_ASSERT_OBJ               1
 #define LV_USE_ASSERT_STYLE             1
 #define LV_USE_FLOAT      1
+#define LV_USE_MATRIX     1
 
 #define LV_FONT_MONTSERRAT_8    1
 #define LV_FONT_MONTSERRAT_10   1
@@ -135,8 +136,10 @@
     #define LV_LIBINPUT_XKB     1
 #endif
 
-#if !defined(NON_AMD64_BUILD) && !defined(_MSC_VER) && !defined(_WIN32)
-    #define LV_USE_OPENGLES 1
+#ifndef LV_USE_OPENGLES
+    #if !defined(NON_AMD64_BUILD) && !defined(_MSC_VER) && !defined(_WIN32)
+        #define LV_USE_OPENGLES 1
+    #endif
 #endif
 
 #define LV_USE_FREETYPE 1

@@ -30,7 +30,7 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, lv_image_header_t * header);
+static lv_result_t decoder_info(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc, lv_image_header_t * header);
 static lv_result_t decoder_open(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc);
 
 static lv_result_t decoder_get_area(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc,
@@ -77,11 +77,12 @@ void lv_tjpgd_deinit(void)
  *   STATIC FUNCTIONS
  **********************/
 
-static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, lv_image_header_t * header)
+static lv_result_t decoder_info(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc, lv_image_header_t * header)
 {
     LV_UNUSED(decoder);
 
-    lv_image_src_t src_type = lv_image_src_get_type(src);
+    const void * src = dsc->src;
+    lv_image_src_t src_type = dsc->src_type;
 
     if(src_type == LV_IMAGE_SRC_VARIABLE) {
         const lv_image_dsc_t * img_dsc = src;
@@ -103,18 +104,13 @@ static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, 
     }
     else if(src_type == LV_IMAGE_SRC_FILE) {
         const char * fn = src;
-        if((lv_strcmp(lv_fs_get_ext(fn), "jpg") == 0) || (lv_strcmp(lv_fs_get_ext(fn), "jpeg") == 0)) {
-            lv_fs_file_t f;
-            lv_fs_res_t res;
-            res = lv_fs_open(&f, fn, LV_FS_MODE_RD);
-            if(res != LV_FS_RES_OK) return LV_RESULT_INVALID;
-
+        const char * ext = lv_fs_get_ext(fn);
+        if((lv_strcmp(ext, "jpg") == 0) || (lv_strcmp(ext, "jpeg") == 0)) {
             uint8_t workb[TJPGD_WORKBUFF_SIZE];
             JDEC jd;
-            JRESULT rc = jd_prepare(&jd, input_func, workb, TJPGD_WORKBUFF_SIZE, &f);
+            JRESULT rc = jd_prepare(&jd, input_func, workb, TJPGD_WORKBUFF_SIZE, &dsc->file);
             if(rc) {
                 LV_LOG_WARN("jd_prepare error: %d", rc);
-                lv_fs_close(&f);
                 return LV_RESULT_INVALID;
             }
             header->cf = LV_COLOR_FORMAT_RAW;
@@ -122,7 +118,6 @@ static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, 
             header->h = jd.height;
             header->stride = jd.width * 3;
 
-            lv_fs_close(&f);
             return LV_RESULT_OK;
         }
     }
@@ -240,7 +235,6 @@ static lv_result_t decoder_get_area(lv_image_decoder_t * decoder, lv_image_decod
         }
         decoded->data = jd->workbuf;
         decoded->header = dsc->header;
-        decoded->header.stride = mx * 3;
     }
 
     decoded_area->x1 += mx;
@@ -253,8 +247,12 @@ static lv_result_t decoder_get_area(lv_image_decoder_t * decoder, lv_image_decod
         decoded_area->y2 += my;
     }
 
-    decoded->header.w = mx;
-    decoded->header.h = my;
+    if(decoded_area->x2 >= jd->width) decoded_area->x2 = jd->width - 1;
+    if(decoded_area->y2 >= jd->height) decoded_area->y2 = jd->height - 1;
+
+    decoded->header.w = lv_area_get_width(decoded_area);
+    decoded->header.h = lv_area_get_height(decoded_area);
+    decoded->header.stride = decoded->header.w * 3;
     decoded->data_size = decoded->header.stride * decoded->header.h;
 
     /* Process restart interval if enabled */

@@ -19,6 +19,7 @@ extern "C" {
 #include "../misc/lv_style.h"
 #include "../misc/lv_text.h"
 #include "../misc/lv_profiler.h"
+#include "../misc/lv_matrix.h"
 #include "lv_image_decoder.h"
 #include "../osal/lv_os.h"
 #include "lv_draw_buf.h"
@@ -27,6 +28,13 @@ extern "C" {
  *      DEFINES
  *********************/
 #define LV_DRAW_UNIT_NONE  0
+#define LV_DRAW_UNIT_IDLE  -1   /*The draw unit is idle, new dispatching might be requested to try again*/
+
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+#if !LV_USE_MATRIX
+#error "LV_DRAW_TRANSFORM_USE_MATRIX requires LV_USE_MATRIX = 1"
+#endif
+#endif
 
 /**********************
  *      TYPEDEFS
@@ -78,6 +86,11 @@ struct _lv_draw_task_t {
      * Therefore during drawing the layer's clip area shouldn't be used as it might be already changed for other draw tasks.
      */
     lv_area_t clip_area;
+
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+    /** Transform matrix to be applied when rendering the layer */
+    lv_matrix_t matrix;
+#endif
 
     volatile int state;              /*int instead of lv_draw_task_state_t to be sure its atomic*/
 
@@ -165,6 +178,11 @@ struct _lv_layer_t  {
      */
     lv_area_t _clip_area;
 
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+    /** Transform matrix to be applied when rendering the layer */
+    lv_matrix_t matrix;
+#endif
+
     /** Linked list of draw tasks */
     lv_draw_task_t * draw_task_head;
 
@@ -231,7 +249,7 @@ lv_draw_task_t * lv_draw_add_task(lv_layer_t * layer, const lv_area_t * coords);
  * It will send an event about the new draw task to the widget
  * and assign it to a draw unit.
  * @param layer     pointer to a layer
- * @param t         poinr to a draw task
+ * @param t         pointer to a draw task
  */
 void lv_draw_finalize_task_creation(lv_layer_t * layer, lv_draw_task_t * t);
 
@@ -271,7 +289,7 @@ lv_draw_task_t * lv_draw_get_next_available_task(lv_layer_t * layer, lv_draw_tas
 
 /**
  * Tell how many draw task are waiting to be drawn on the area of `t_check`.
- * It can be used to determine if a GPU shall combine many draw tasks in to one or not.
+ * It can be used to determine if a GPU shall combine many draw tasks into one or not.
  * If a lot of tasks are waiting for the current ones it makes sense to draw them one-by-one
  * to not block the dependent tasks' rendering
  * @param t_check   the task whose dependent tasks shall be counted

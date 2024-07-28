@@ -254,6 +254,17 @@ void _lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
     if(!disp) return;
     if(!lv_display_is_invalidation_enabled(disp)) return;
 
+    /**
+     * There are two reasons for this issue:
+     *  1.LVGL API is being used across threads, such as modifying widget properties in another thread
+     *    or within an interrupt handler during the main thread rendering process.
+     *  2.User-customized widget modify widget properties/styles again within the DRAW event.
+     *
+     * Therefore, ensure that LVGL is used in a single-threaded manner, or refer to
+     * documentation: https://docs.lvgl.io/master/porting/os.html for proper locking mechanisms.
+     * Additionally, ensure that only drawing-related tasks are performed within the DRAW event,
+     * and move widget property/style modifications to other events.
+     */
     LV_ASSERT_MSG(!disp->rendering_in_progress, "Invalidate area is not allowed during rendering.");
 
     /*Clear the invalidate buffer if the parameter is NULL*/
@@ -573,13 +584,14 @@ static void refr_invalid_areas(void)
  */
 static void layer_reshape_draw_buf(lv_layer_t * layer)
 {
-    LV_ASSERT(lv_draw_buf_reshape(
-                  layer->draw_buf,
-                  layer->color_format,
-                  lv_area_get_width(&layer->buf_area),
-                  lv_area_get_height(&layer->buf_area),
-                  0)
-              != NULL);
+    lv_draw_buf_t * ret = lv_draw_buf_reshape(
+                              layer->draw_buf,
+                              layer->color_format,
+                              lv_area_get_width(&layer->buf_area),
+                              lv_area_get_height(&layer->buf_area),
+                              0);
+    LV_UNUSED(ret);
+    LV_ASSERT_NULL(ret);
 }
 
 /**
@@ -591,6 +603,10 @@ static void refr_area(const lv_area_t * area_p)
     LV_PROFILER_BEGIN;
     lv_layer_t * layer = disp_refr->layer_head;
     layer->draw_buf = disp_refr->buf_act;
+
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+    lv_matrix_identity(&layer->matrix);
+#endif
 
     /*With full refresh just redraw directly into the buffer*/
     /*In direct mode draw directly on the absolute coordinates of the buffer*/
@@ -807,7 +823,7 @@ static void refr_obj_and_children(lv_layer_t * layer, lv_obj_t * top_obj)
             }
         }
 
-        /*Call the post draw draw function of the parents of the to object*/
+        /*Call the post draw function of the parents of the to object*/
         lv_obj_send_event(parent, LV_EVENT_DRAW_POST_BEGIN, (void *)layer);
         lv_obj_send_event(parent, LV_EVENT_DRAW_POST, (void *)layer);
         lv_obj_send_event(parent, LV_EVENT_DRAW_POST_END, (void *)layer);
@@ -879,24 +895,126 @@ static bool alpha_test_area_on_obj(lv_obj_t * obj, const lv_area_t * area)
     else return true;
 }
 
-void refr_obj(lv_layer_t * layer, lv_obj_t * obj)
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+
+static void refr_obj_matrix(lv_layer_t * layer, lv_obj_t * obj)
+{
+    lv_matrix_t ori_matrix = layer->matrix;
+    lv_matrix_t obj_matrix;
+    lv_matrix_identity(&obj_matrix);
+
+    lv_point_t pivot = {
+        .x = lv_obj_get_style_transform_pivot_x(obj, 0),
+        .y = lv_obj_get_style_transform_pivot_y(obj, 0)
+    };
+
+    pivot.x = obj->coords.x1 + lv_pct_to_px(pivot.x, lv_area_get_width(&obj->coords));
+    pivot.y = obj->coords.y1 + lv_pct_to_px(pivot.y, lv_area_get_height(&obj->coords));
+
+    int32_t rotation = lv_obj_get_style_transform_rotation(obj, 0);
+    int32_t scale_x = lv_obj_get_style_transform_scale_x(obj, 0);
+    int32_t scale_y = lv_obj_get_style_transform_scale_y(obj, 0);
+    int32_t skew_x = lv_obj_get_style_transform_skew_x(obj, 0);
+    int32_t skew_y = lv_obj_get_style_transform_skew_y(obj, 0);
+
+    /* generate the obj matrix */
+    lv_matrix_translate(&obj_matrix, pivot.x, pivot.y);
+    if(rotation != 0) {
+        lv_matrix_rotate(&obj_matrix, rotation * 0.1f);
+    }
+
+    if(scale_x != LV_SCALE_NONE || scale_y != LV_SCALE_NONE) {
+        lv_matrix_scale(
+            &obj_matrix,
+            (float)scale_x / LV_SCALE_NONE,
+            (float)scale_y / LV_SCALE_NONE
+        );
+    }
+
+    if(skew_x != 0 || skew_y != 0) {
+        lv_matrix_skew(&obj_matrix, skew_x, skew_y);
+    }
+
+    lv_matrix_translate(&obj_matrix, -pivot.x, -pivot.y);
+
+    /* apply the obj matrix */
+    lv_matrix_multiply(&layer->matrix, &obj_matrix);
+
+    /* calculate clip area without transform */
+    lv_matrix_t matrix_reverse;
+    lv_matrix_inverse(&matrix_reverse, &obj_matrix);
+
+    lv_area_t clip_area = layer->_clip_area;
+    lv_area_t clip_area_ori = layer->_clip_area;
+    clip_area = lv_matrix_transform_area(&matrix_reverse, &clip_area);
+
+    /* increase the clip area by 1 pixel to avoid rounding errors */
+    if(!lv_matrix_is_identity_or_translation(&obj_matrix)) {
+        lv_area_increase(&clip_area, 1, 1);
+    }
+
+    layer->_clip_area = clip_area;
+
+    /* redraw obj */
+    lv_obj_redraw(layer, obj);
+
+    /* restore original matrix */
+    layer->matrix = ori_matrix;
+    /* restore clip area */
+    layer->_clip_area = clip_area_ori;
+}
+
+static bool refr_check_obj_clip_overflow(lv_layer_t * layer, lv_obj_t * obj)
+{
+    if(lv_obj_get_style_transform_rotation(obj, 0) == 0) {
+        return false;
+    }
+
+    /*Truncate the area to the object*/
+    lv_area_t obj_coords;
+    int32_t ext_size = _lv_obj_get_ext_draw_size(obj);
+    lv_area_copy(&obj_coords, &obj->coords);
+    lv_area_increase(&obj_coords, ext_size, ext_size);
+
+    lv_obj_get_transformed_area(obj, &obj_coords, LV_OBJ_POINT_TRANSFORM_FLAG_RECURSIVE);
+
+    lv_area_t clip_coords_for_obj;
+    if(!_lv_area_intersect(&clip_coords_for_obj, &layer->_clip_area, &obj_coords)) {
+        return false;
+    }
+
+    bool has_clip = lv_memcmp(&clip_coords_for_obj, &obj_coords, sizeof(lv_area_t)) != 0;
+    return has_clip;
+}
+
+#endif /* LV_DRAW_TRANSFORM_USE_MATRIX */
+
+static void refr_obj(lv_layer_t * layer, lv_obj_t * obj)
 {
     if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return;
+
+    lv_opa_t opa = lv_obj_get_style_opa_layered(obj, 0);
+    if(opa < LV_OPA_MIN) return;
+
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+    /*If the layer opa is full then use the matrix transform*/
+    if(opa >= LV_OPA_MAX && !refr_check_obj_clip_overflow(layer, obj)) {
+        refr_obj_matrix(layer, obj);
+        return;
+    }
+#endif /* LV_DRAW_TRANSFORM_USE_MATRIX */
 
     lv_layer_type_t layer_type = _lv_obj_get_layer_type(obj);
     if(layer_type == LV_LAYER_TYPE_NONE) {
         lv_obj_redraw(layer, obj);
     }
     else {
-        lv_opa_t opa = lv_obj_get_style_opa_layered(obj, 0);
-        if(opa < LV_OPA_MIN) return;
-
         lv_area_t layer_area_full;
         lv_area_t obj_draw_size;
         lv_result_t res = layer_get_area(layer, obj, layer_type, &layer_area_full, &obj_draw_size);
         if(res != LV_RESULT_OK) return;
 
-        /*Simple layers can be subdivied into smaller layers*/
+        /*Simple layers can be subdivided into smaller layers*/
         uint32_t max_rgb_row_height = lv_area_get_height(&layer_area_full);
         uint32_t max_argb_row_height = lv_area_get_height(&layer_area_full);
         if(layer_type == LV_LAYER_TYPE_SIMPLE) {
