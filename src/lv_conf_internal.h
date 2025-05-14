@@ -961,6 +961,15 @@
     #endif
 #endif
 
+/** Use Espressif's PPA on ESP platforms. */
+#ifndef LV_USE_PPA
+    #ifdef CONFIG_LV_USE_PPA
+        #define LV_USE_PPA CONFIG_LV_USE_PPA
+    #else
+        #define LV_USE_PPA 0
+    #endif
+#endif
+
 /*=======================
  * FEATURE CONFIGURATION
  *=======================*/
