@@ -3,7 +3,7 @@
 
 #include "../../core/lv_global.h"
 #include <SPI.h>
-#include "SD.h"
+#include "SD_MMC.h"
 
 #if !LV_FS_IS_VALID_LETTER(LV_FS_ARDUINO_SD_LETTER)
     #error "Invalid drive letter"
@@ -72,7 +72,7 @@ static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode)
     char buf[LV_FS_MAX_PATH_LEN];
     lv_snprintf(buf, sizeof(buf), LV_FS_ARDUINO_SD_PATH "%s", path);
 
-    File file = SD.open(buf, flags);
+    File file = SD_MMC.open(buf, flags);
     if(!file) {
         return NULL;
     }
